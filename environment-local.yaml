@@ -1,0 +1,14 @@
+name: alethic-ism-monitor
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.11
+  - python-dotenv
+  - psycopg2
+  - pyyaml
+  - pulsar-client
+  - pydantic
+  - restrictedpython
+  - alethic-ism-core
+  - alethic-ism-db
