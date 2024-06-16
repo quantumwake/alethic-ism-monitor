@@ -1,0 +1,54 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: alethic-ism-monitor-deployment
+  namespace: alethic
+spec:
+  replicas: 1 
+  selector:
+    matchLabels:
+      app: alethic-ism-monitor
+  template:
+    metadata:
+      labels:
+        app: alethic-ism-monitor
+    spec:
+      containers:
+      - name: alethic-ism-monitor
+        image: krasaee/alethic-ism-monitor:156feaa288ce5f9aaa6001d573e026df6f414d15
+        imagePullPolicy: Always
+        env:
+          # Consumer Configuration for Pulsar
+          - name: MSG_URL
+            valueFrom:
+              secretKeyRef:
+                name: alethic-ism-monitor-secret
+                key: MSG_URL
+
+          - name: MSG_TOPIC
+            valueFrom:
+              secretKeyRef:
+                name: alethic-ism-monitor-secret
+                key: MSG_TOPIC
+
+          - name: MSG_MANAGE_TOPIC
+            valueFrom:
+              secretKeyRef:
+                name: alethic-ism-monitor-secret
+                key: MSG_MANAGE_TOPIC
+
+          - name: MSG_TOPIC_SUBSCRIPTION
+            valueFrom:
+              secretKeyRef:
+                name: alethic-ism-monitor-secret
+                key: MSG_TOPIC_SUBSCRIPTION
+
+          # Database connection details
+          - name: DATABASE_URL
+            valueFrom:
+              secretKeyRef:
+                name: alethic-ism-monitor-secret
+                key: DATABASE_URL
+
+      imagePullSecrets:
+      - name: regcred
