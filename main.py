@@ -35,56 +35,54 @@ class MessagingConsumerMonitor(BaseMessagingConsumer):
             raise ValueError(f'no state type found in message: {message}')
 
         message_type = message['type']
-        if not message_type or message_type != 'processor_state':
-            raise ValueError(f'unsupported monitor type {message_type}')
+        # if not message_type or message_type != 'processor_state':
+        #     raise ValueError(f'unsupported monitor type {message_type}')
 
-        if 'processor_state' not in message:
-            raise ValueError(f'mandatory processor state information not found in state update message {message}')
+        # if 'processor_state' not in message:
+        #     raise ValueError(f'mandatory processor state information not found in state update message {message}')
+        #
+
+        if 'route_id' not in message:
+            raise ValueError(f'mandatory route_id value not defined in state update message {message}')
 
         if 'status' not in message:
             raise ValueError(f'mandatory status value not defined in state update message {message}')
 
         logging.debug(f'inbound processor state update message received: {message}')
         try:
+
+            # fetch route_id and status
+            route_id = message['route_id']
             status = ProcessorStatusCode(message['status'])
-            processor_state = ProcessorState(**message['processor_state'])
-            processor_state.status = ProcessorStatusCode(status)
+
+            # fetch the stored processor state information
+            processor_state = storage.fetch_processor_state_route(route_id=route_id)
+
+            if not processor_state or len(processor_state) != 1:
+                raise ValueError(f'invalid processor state for route {route_id}, expected 1 got {processor_state}')
+
+            processor_state = processor_state[0]
+            processor_state.status = status    # update the status code
             logging.debug(f'updating processor state {processor_state}')
-            processor_state = storage.insert_processor_state(processor_state=processor_state)
+            processor_state = storage.insert_processor_state_route(processor_state=processor_state)    # persist status
+            logging.debug(f'updated processor state {processor_state}')
 
             # insert monitor log event if any of these are present
-            # user_id = message['user_id'] if 'user_id' in message else None
-            # project_id = message['project_id'] if 'project_id' in message else None
             exception = message['exception'] if 'exception' in message else None
             data = message['data'] if 'data' in message else None
 
             # if there is an exception or data, try to record as much detail
             # as possible, as to the nature of the processor state failure
             if exception or data:
-
-                # if an internal id is set, then try and extract the user_id and project_id this state is associated to
-                if processor_state.internal_id:
-
-                    user_id = None
-                    if 'user_id' in message and message['user_id']:
-                        user_id = message['user_id']
-
-                    project_id = None
-                    if 'project_id' in message and message['project_id']:
-                        project_id = message['project_id']
-
-                    if not (project_id and user_id):
-                        processor = storage.fetch_processor(processor_id=processor_state.processor_id)
-                        project_id = processor.project_id
-                        project = storage.fetch_user_project(project_id=project_id)
-                        user_id = project.user_id
+                processor = storage.fetch_processor(processor_id=processor_state.processor_id)
+                project = storage.fetch_user_project(processor.project_id)
 
                 # record the event log
                 monitor_log_event = MonitorLogEvent(
                     log_type=message_type,
                     internal_reference_id=processor_state.internal_id,
-                    user_id=user_id,
-                    project_id=project_id,
+                    user_id=project.user_id,
+                    project_id=processor.project_id,
                     data=str(message['data']) if 'data' in message else None,
                     exception=str(message['exception']) if 'exception' in message else None
                 )
@@ -92,7 +90,7 @@ class MessagingConsumerMonitor(BaseMessagingConsumer):
                 self.storage.insert_monitor_log_event(monitor_log_event=monitor_log_event)
 
         except Exception as e:
-            logging.error(f'unable to process state update for data: {message}', exc_info=e)
+            logging.warn(f'unable to process state update for data: {message}', exc_info=e)
 
     async def pre_execute(self, consumer_message_mapping: dict, **kwargs):
         pass         # nothing to do here since we do not need to monitor the monitor

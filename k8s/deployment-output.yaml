@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
       - name: alethic-ism-monitor
-        image: krasaee/alethic-ism-monitor:156feaa288ce5f9aaa6001d573e026df6f414d15
+        image: krasaee/alethic-ism-monitor:9e8a6dceffbac3ecfa916867f38629ddc9916ff3
         imagePullPolicy: Always
         env:
           # Consumer Configuration for Pulsar
