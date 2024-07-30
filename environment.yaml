@@ -8,8 +8,9 @@ dependencies:
   - python-dotenv
   - psycopg2
   - pyyaml
-  - pulsar-client
+#  - pulsar-client
   - pydantic
   - restrictedpython
+  - nats-py
   - alethic-ism-core
   - alethic-ism-db
