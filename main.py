@@ -130,4 +130,4 @@ if __name__ == '__main__':
 
     consumer.setup_shutdown_signal()
     consumer_no = random.randint(0, 20)
-    asyncio.get_event_loop().run_until_complete(consumer.start_consumer(consumer_no=consumer_no))
+    asyncio.get_event_loop().run_until_complete(consumer.start_consumer())
