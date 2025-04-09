@@ -2,19 +2,23 @@ import asyncio
 import os
 import random
 
+import logging
+from typing import Any
+
 import dotenv
-from core.base_model import ProcessorStatusCode, ProcessorState, MonitorLogEvent
-from core.messaging.base_message_provider import BaseMessageConsumer
-from core.messaging.base_message_route_model import BaseRoute
-from core.messaging.base_message_router import Router
-from core.messaging.nats_message_provider import NATSMessageProvider
-from core.processor_state_storage import StateMachineStorage
-from db.processor_state_db_storage import PostgresDatabaseStorage, logging
+from ismcore.messaging.base_message_provider import BaseMessageConsumer
+from ismcore.messaging.base_message_route_model import BaseRoute
+from ismcore.messaging.base_message_router import Router
+from ismcore.messaging.nats_message_provider import NATSMessageProvider
+from ismcore.model.base_model import ProcessorStatusCode, MonitorLogEvent, ProcessorState
+from ismcore.storage.processor_state_storage import StateMachineStorage
+from ismdb.postgres_storage_class import PostgresDatabaseStorage
 
 dotenv.load_dotenv()
 ROUTING_FILE = os.environ.get("ROUTING_FILE", ".routing-nats.yaml")
 
 # database related
+LOG_LEVEL = os.environ.get("LOG_LEVEL", "DEBUG")
 DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://postgres:postgres1@localhost:5432/postgres")
 
 # state storage specifically to handle this processor state (stateless obj)
@@ -31,6 +35,15 @@ router = Router(
 )
 
 monitor_route = router.find_route("processor/monitor")
+#
+logging.basicConfig(level=LOG_LEVEL)
+logging.info(DATABASE_URL[:20])
+logging = logging.getLogger(__name__)
+
+# setup the storage device for managing state, state configs, templates, models and so forth
+storage = PostgresDatabaseStorage(database_url=DATABASE_URL)
+
+
 
 
 class MessagingConsumerMonitor(BaseMessageConsumer):
@@ -114,11 +127,12 @@ class MessagingConsumerMonitor(BaseMessageConsumer):
     async def fail_validate_input_message(self, consumer_message_mapping: dict, exception: Exception = None):
         logging.error(f'invalid consumer message received: {consumer_message_mapping}', exc_info=exception)
 
-    async def fail_execute_processor_state(
-            self, processor_state: ProcessorState,
-            exception: Exception,
-            data: dict, **kwargs):
-        logging.error(f'invalid processor state update received: {processor_state} with data: {data}',
+    async def fail_execute_processor_state(self,
+                                           route_id: str,
+                                           exception: Any,
+                                           data: dict = None,
+                                           **kwargs):
+        logging.error(f'invalid processor state update received: {route_id} with data: {data}',
                       exc_info=exception)
 
 
