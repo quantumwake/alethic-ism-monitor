@@ -2,7 +2,7 @@
 .PHONY: build push deploy all
 
 # Default image name - can be overridden with make IMAGE=your-image-name
-IMAGE ?= krasaee/alethic-ism-state-sync-store:latest
+IMAGE ?= krasaee/alethic-ism-monitor:latest
 
 # Ensure scripts are executable
 init:
