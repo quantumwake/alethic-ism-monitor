@@ -3,10 +3,10 @@
 ** rough draft, not ready for production use at scale, v2 in go will be used for production **
 
 **Building from Source**
-- `git clone https://github.com/quantumwake/alethic-ism-usage.git`
+- `git clone https://github.com/quantumwake/alethic-ism-monitor.git`
 
 **Docker Build:**
-- Use `./docker_build.sh -t krasaee/alethic-ism-api:local` to build a Docker image
+- Use `./docker_build.sh -t krasaee/alethic-ism-monitor:local` to build a Docker image
 
 ** Required Packages (not available in conda)
 - `pip install uv`
