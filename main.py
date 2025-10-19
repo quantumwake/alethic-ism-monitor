@@ -1,50 +1,35 @@
 import asyncio
 import os
 import random
-
-import logging
-from typing import Any
-
 import dotenv
+
+from typing import Any
 from ismcore.messaging.base_message_provider import BaseMessageConsumer
 from ismcore.messaging.base_message_route_model import BaseRoute
 from ismcore.messaging.base_message_router import Router
 from ismcore.messaging.nats_message_provider import NATSMessageProvider
 from ismcore.model.base_model import ProcessorStatusCode, MonitorLogEvent, ProcessorState
 from ismcore.storage.processor_state_storage import StateMachineStorage
+from ismcore.utils.ism_logger import ism_logger
 from ismdb.postgres_storage_class import PostgresDatabaseStorage
 
 dotenv.load_dotenv()
+
+# routing file configuration
 ROUTING_FILE = os.environ.get("ROUTING_FILE", ".routing-nats.yaml")
 
-# database related
-LOG_LEVEL = os.environ.get("LOG_LEVEL", "DEBUG")
+# database configuration
 DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://postgres:postgres1@localhost:5432/postgres")
 
-# state storage specifically to handle this processor state (stateless obj)
-storage = PostgresDatabaseStorage(
-    database_url=DATABASE_URL,
-    incremental=True
-)
+# storage initialization
+storageBackend = PostgresDatabaseStorage(database_url=DATABASE_URL, incremental=True)
 
+# state machine routing
 message_provider = NATSMessageProvider()
+router = Router(provider=message_provider, yaml_file=ROUTING_FILE)
+monitor_route = router.find_route_wildcard("processor/monitor")
 
-router = Router(
-    provider=message_provider,
-    yaml_file=ROUTING_FILE
-)
-
-monitor_route = router.find_route("processor/monitor")
-#
-logging.basicConfig(level=LOG_LEVEL)
-logging.info(DATABASE_URL[:20])
-logging = logging.getLogger(__name__)
-
-# setup the storage device for managing state, state configs, templates, models and so forth
-storage = PostgresDatabaseStorage(database_url=DATABASE_URL)
-
-
-
+logger = ism_logger(__name__)
 
 class MessagingConsumerMonitor(BaseMessageConsumer):
 
@@ -71,7 +56,7 @@ class MessagingConsumerMonitor(BaseMessageConsumer):
         if 'status' not in message:
             raise ValueError(f'mandatory status value not defined in state update message {message}')
 
-        logging.debug(f'inbound processor state update message received: {message}')
+        logger.debug(f'inbound processor state update message received: {message}')
         try:
 
             # fetch route_id and status
@@ -79,16 +64,16 @@ class MessagingConsumerMonitor(BaseMessageConsumer):
             status = ProcessorStatusCode(message['status'])
 
             # fetch the stored processor state information
-            processor_state = storage.fetch_processor_state_route(route_id=route_id)
+            processor_state = self.storage.fetch_processor_state_route(route_id=route_id)
 
             if not processor_state or len(processor_state) != 1:
                 raise ValueError(f'invalid processor state for route {route_id}, expected 1 got {processor_state}')
 
             processor_state = processor_state[0]
             processor_state.status = status    # update the status code
-            logging.debug(f'updating processor state {processor_state}')
-            processor_state = storage.insert_processor_state_route(processor_state=processor_state)    # persist status
-            logging.debug(f'updated processor state {processor_state}')
+            logger.debug(f'updating processor state {processor_state}')
+            processor_state = self.storage.insert_processor_state_route(processor_state=processor_state)    # persist status
+            logger.debug(f'updated processor state {processor_state}')
 
             # insert monitor log event if any of these are present
             exception = message['exception'] if 'exception' in message else None
@@ -97,8 +82,8 @@ class MessagingConsumerMonitor(BaseMessageConsumer):
             # if there is an exception or data, try to record as much detail
             # as possible, as to the nature of the processor state failure
             if exception or data:
-                processor = storage.fetch_processor(processor_id=processor_state.processor_id)
-                project = storage.fetch_user_project(processor.project_id)
+                processor = self.storage.fetch_processor(processor_id=processor_state.processor_id)
+                project = self.storage.fetch_user_project(processor.project_id)
 
                 # record the event log
                 monitor_log_event = MonitorLogEvent(
@@ -111,9 +96,8 @@ class MessagingConsumerMonitor(BaseMessageConsumer):
                 )
 
                 self.storage.insert_monitor_log_event(monitor_log_event=monitor_log_event)
-
         except Exception as e:
-            logging.warn(f'unable to process state update for data: {message}', exc_info=e)
+            logger.warn(f'unable to process state update for data: {message}', exc_info=e)
 
     async def pre_execute(self, consumer_message_mapping: dict, **kwargs):
         pass         # nothing to do here since we do not need to monitor the monitor
@@ -125,21 +109,21 @@ class MessagingConsumerMonitor(BaseMessageConsumer):
         pass         # nothing to do here since we do not need to monitor the monitor
 
     async def fail_validate_input_message(self, consumer_message_mapping: dict, exception: Exception = None):
-        logging.error(f'invalid consumer message received: {consumer_message_mapping}', exc_info=exception)
+        logger.error(f'invalid consumer message received: {consumer_message_mapping}', exc_info=exception)
 
     async def fail_execute_processor_state(self,
                                            route_id: str,
                                            exception: Any,
                                            data: dict = None,
                                            **kwargs):
-        logging.error(f'invalid processor state update received: {route_id} with data: {data}',
-                      exc_info=exception)
+        logger.error(f'invalid processor state update received: {route_id} with data: {data}',
+                     exc_info=exception)
 
 
 if __name__ == '__main__':
     consumer = MessagingConsumerMonitor(
         route=monitor_route,
-        storage=storage
+        storage=storageBackend
     )
 
     consumer.setup_shutdown_signal()
