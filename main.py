@@ -70,10 +70,10 @@ class MessagingConsumerMonitor(BaseMessageConsumer):
                 raise ValueError(f'invalid processor state for route {route_id}, expected 1 got {processor_state}')
 
             processor_state = processor_state[0]
-            processor_state.status = status    # update the status code
-            logger.debug(f'updating processor state {processor_state}')
-            processor_state = self.storage.insert_processor_state_route(processor_state=processor_state)    # persist status
-            logger.debug(f'updated processor state {processor_state}')
+            logger.debug(f'updating processor state {processor_state.id} status to {status}')
+            self.storage.update_processor_state_route_status(route_id=processor_state.id, status=status)
+            processor_state.status = status  # update local object to reflect the change
+            logger.debug(f'updated processor state {processor_state.id}')
 
             # insert monitor log event if any of these are present
             exception = message['exception'] if 'exception' in message else None
